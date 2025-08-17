@@ -1,9 +1,29 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { createChart, ISeriesApi } from 'lightweight-charts';
+import { createChart, ISeriesApi, CandlestickData, Time, UTCTimestamp, BusinessDay } from 'lightweight-charts';
 
 type Bar = { time: string | number; open: number; high: number; low: number; close: number };
+
+function toTime(t: string | number): Time {
+  if (typeof t === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(t)) {
+    const [y, m, d] = t.split('-').map(Number);
+    return { year: y, month: m as any, day: d } as BusinessDay;
+  }
+  const n = Number(t);
+  const sec = n > 1e12 ? Math.floor(n / 1000) : n;
+  return sec as UTCTimestamp;
+}
+
+function toCandles(bars: any[]): CandlestickData<Time>[] {
+  return (bars || []).map((b) => ({
+    time: toTime(b.date ?? b.time ?? b.t),
+    open: Number(b.open ?? b.o),
+    high: Number(b.high ?? b.h),
+    low: Number(b.low ?? b.l),
+    close: Number(b.close ?? b.c),
+  }));
+}
 
 export default function Home() {
   const chartRef = useRef<HTMLDivElement>(null);
@@ -13,8 +33,8 @@ export default function Home() {
 
   async function fetchBars(sym: string): Promise<Bar[]> {
     const to = new Date();
-    const from = new Date(Date.now() - 30*24*3600*1000);
-    const fmt = (d: Date) => d.toISOString().slice(0,10);
+    const from = new Date(Date.now() - 30 * 24 * 3600 * 1000);
+    const fmt = (d: Date) => d.toISOString().slice(0, 10);
     const r = await fetch(`/api/bars?symbol=${encodeURIComponent(sym)}&from=${fmt(from)}&to=${fmt(to)}`, { cache: 'no-store' });
     const data = await r.json();
     if (!Array.isArray(data)) return [];
@@ -40,7 +60,7 @@ export default function Home() {
 
     (async () => {
       const bars = await fetchBars(symbol);
-      series.setData(bars);
+      series.setData(toCandles(bars));
     })();
 
     const onResize = () => chart.applyOptions({ width: chartRef.current!.clientWidth });
@@ -63,7 +83,7 @@ export default function Home() {
         <button
           onClick={async () => {
             const bars = await fetchBars(symbol);
-            seriesRef.current?.setData(bars);
+            seriesRef.current?.setData(toCandles(bars));
           }}
           style={{ padding: '8px 12px', background: '#1e293b', color: '#e6e9ef', borderRadius: 8, border: '1px solid #334155' }}
         >
